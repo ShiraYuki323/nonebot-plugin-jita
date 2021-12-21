@@ -1,16 +1,12 @@
 import xmltodict
 import ssl
 import aiohttp
-import xlrd
-
+from .evedata import eved
 headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36"}
 ssl._create_default_https_context = ssl._create_unverified_context
 
-
-workbook = xlrd.open_workbook()#你的表格绝对位置如r'C:\Users\Administrator\Desktop\yourbot\trans.xlsx'
-tab = workbook.sheet_by_name("物品与技能")
-length = tab.nrows  
-
+eve_types = eved.eve_types
+listLen = len(eve_types)
 async def getmkt(id)->dict:
     try:       
         url = (f"https://api.evemarketer.com/ec/marketstat?usesystem=30000142&typeid={id}")
@@ -34,35 +30,50 @@ async def getmkt(id)->dict:
         return jita
 
 async def GetItem(CnItem):
-    num = 0 
-    for i in range(length):
-        row = tab.row_values(i)
-        if CnItem in row[1]:
-            ItemId = str(row[2]).replace(".0","")
-            ItemName = str(row[1])
+    num = 0
+    for i in eve_types:
+        if CnItem in eve_types[i][0]:
+            ItemId = i
+            ItemName = eve_types[i][0]
             ItemDir={'id':ItemId,'name':ItemName}
+            print(ItemDir)
             return ItemDir
         else:
-            num = num + 1
-            if(num == 21085):
+            num = num+1
+            if num == listLen:
                 return "表内无此物品"
 
 async def PGetItem(CnItem):
     num = 0
-    for i in range(length):
-        row = tab.row_values(i)
-        if CnItem == row[1]:
-            ItemId = str(row[2]).replace(".0","")
-            ItemName = str(row[1])
+    for i in range(eve_types):
+        if CnItem == eve_types[i][0]:
+            ItemId = i
+            ItemName = eve_types[i][0]
             ItemDir={'id':ItemId,'name':ItemName}
             return ItemDir
         else:
-            num = num + 1
-            if(num == 21085):
+            num = num+1
+            if num == listLen:
                 return "表内无此物品"
-
+async def colgetitem(CnItem):
+    num = 0
+    a = 0
+    colall = []
+    for i in eve_types:
+        if CnItem in eve_types[i][0]:
+            a = a +1
+            if a <= 6:
+                ItemId = i
+                ItemName = eve_types[i][0]
+                ItemDir={'id':ItemId,'name':ItemName}
+                colall.append(ItemDir)
+        else:
+            num = num +1
+            if num == listLen:
+                colall.append('null')         
+    return colall  
 async def getjita(GetCnItem):
-    try:
+    try:       
         item = await GetItem(GetCnItem)
         if item != "表内无此物品":
             jitamkt = await getmkt(item['id'])
@@ -75,7 +86,7 @@ async def getjita(GetCnItem):
         else:
             return "无法查询此物品,表内可能没有此物品"
     except Exception as e:
-        return e
+        return ('出错啦！错误是：' +str(e))
 
 async def pregetjita(GetCnItem):
     try:
@@ -91,4 +102,28 @@ async def pregetjita(GetCnItem):
         else:
             return "无法查询此物品,请检查物品名称是否完整"
     except Exception as e:
-        return e
+        return ('出错啦！错误是：' +str(e))
+
+async def colgetjita(GetCnItem):
+    try:
+        colv = []
+        num  = -1
+        wn = 1
+        item = await colgetitem(GetCnItem)
+        if item[0]!='null':
+            while wn <= 6:
+                wn = wn + 1
+                num = num+1
+                jitamkt = await getmkt(item[num]['id'])      
+                jitabuy = jitamkt['buy']  
+                jitasell = jitamkt['sell']      
+                col = {'name':f'{item[num]["name"]}','buy':jitabuy,'sell':jitasell}
+                colv.append(col)
+            allbuy = format((colv[0]['buy'] + colv[1]['buy'] + colv[2]['buy'] + colv[3]['buy'] + colv[4]['buy'] + colv[5]['buy']),',')
+            allsell = format((colv[0]['sell'] + colv[1]['sell'] + colv[2]['sell'] + colv[3]['sell'] + colv[4]['sell'] + colv[5]['sell']),',')
+            all = (f"一堆物品的价格：\n{colv[0]['name']}\nbuy:{format(colv[0]['buy'],',')}\nsell:{format(colv[0]['sell'],',')}\n{colv[1]['name']}\nbuy:{format(colv[1]['buy'],',')}\nsell:{format(colv[1]['sell'],',')}\n{colv[2]['name']}\nbuy:{format(colv[2]['buy'],',')}\nsell:{format(colv[2]['sell'],',')}\n{colv[3]['name']}\nbuy:{format(colv[3]['buy'],',')}\nsell:{format(colv[3]['sell'],',')}\n{colv[4]['name']}\nbuy:{format(colv[4]['buy'],',')}\nsell:{format(colv[4]['sell'],',')}\n{colv[5]['name']}\nbuy:{format(colv[5]['buy'],',')}\nsell:{format(colv[5]['sell'],',')}\n总价:\nbuy:{allbuy}\nsell:{allsell}")
+            return all
+        else:
+            return "无法查询此物品,表内可能没有此物品"
+    except Exception as e:
+        return ('出错啦！错误是：' +str(e) + '\n可能是你需要查询的物品不足6个')
